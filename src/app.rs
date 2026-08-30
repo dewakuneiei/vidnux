@@ -193,15 +193,24 @@ impl App {
     }
 
     /// Turn the banner window into the interface: give it back its title bar,
-    /// let it be resized again, and grow it from the banner's proportions to
-    /// the working size. Done once, on the frame the checks finish.
+    /// free it from the banner's fixed size, and grow it to the working size.
+    /// Done once, on the frame the checks finish.
+    ///
+    /// The window has been `resizable(true)` since it was created — see the
+    /// comment in `main.rs` on why toggling that flag at runtime is not
+    /// trustworthy on Wayland. What actually held the banner still was its
+    /// min and max size hints pinned equal to its own size, so freeing it here
+    /// means relaxing those hints, not flipping `resizable` on.
     fn become_main_window(&self, ctx: &egui::Context) {
         use egui::ViewportCommand as Cmd;
         for cmd in [
-            Cmd::Decorations(true),
-            Cmd::Resizable(true),
             Cmd::MinInnerSize(crate::MIN_WINDOW.into()),
+            // Infinity is egui-winit's sentinel for "no cap at all" — it
+            // clears the OS-level hint outright rather than substituting some
+            // arbitrarily large number that would still have to be picked.
+            Cmd::MaxInnerSize(egui::Vec2::INFINITY),
             Cmd::InnerSize(crate::WINDOW.into()),
+            Cmd::Decorations(true),
         ] {
             ctx.send_viewport_cmd(cmd);
         }

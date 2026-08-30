@@ -3,9 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vidnux — how it converts without losing your footage</title>
-<meta name="description" content="Vidnux is a queue-based video converter for Linux that never rescales, never re-times and never re-grades your footage. Built with Rust and egui, driving ffmpeg.">
+<title>Vidnux — convert video for DaVinci Resolve on Linux without losing quality</title>
+<meta name="description" content="Vidnux is a free, open-source queue-based video converter for Linux. It never rescales, re-times or re-grades your footage, and its default DNxHR preset is the one format the free DaVinci Resolve on Linux always accepts. Built with Rust and egui, driving ffmpeg.">
+<meta name="keywords" content="Vidnux, video converter Linux, DaVinci Resolve Linux, DNxHR converter, ffmpeg GUI, lossless video conversion, ProRes Linux, open source video converter, Rust egui app">
+<meta name="author" content="dewakuneiei">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0e1016">
+<link rel="canonical" href="https://raw.githack.com/dewakuneiei/vidnux/main/docs/index.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎞️</text></svg>">
+
+<!-- Open Graph / Discord / Slack / Mastodon link previews -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Vidnux">
+<meta property="og:title" content="Vidnux — convert video for DaVinci Resolve on Linux without losing quality">
+<meta property="og:description" content="A queue-based video converter for Linux that never rescales, re-times or re-grades your footage. DNxHR, ProRes, AV1, H.264, H.265, FFV1 — built with Rust and egui, driving ffmpeg.">
+<meta property="og:url" content="https://raw.githack.com/dewakuneiei/vidnux/main/docs/index.html">
+<meta property="og:image" content="https://cdn.jsdelivr.net/gh/dewakuneiei/vidnux@main/vidnux.svg">
+<meta property="og:image:type" content="image/svg+xml">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Vidnux — convert video for DaVinci Resolve on Linux without losing quality">
+<meta name="twitter:description" content="A queue-based video converter for Linux that never rescales, re-times or re-grades your footage. Built with Rust and egui, driving ffmpeg.">
+<meta name="twitter:image" content="https://cdn.jsdelivr.net/gh/dewakuneiei/vidnux@main/vidnux.svg">
+
+<!-- Structured data, so search engines can surface this as a software listing -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Vidnux",
+  "softwareVersion": "0.1.0",
+  "description": "A queue-based video converter for Linux that never rescales, re-times or re-grades your footage. Built with Rust and egui, driving ffmpeg. Its default DNxHR preset is the format the free DaVinci Resolve on Linux always accepts.",
+  "url": "https://raw.githack.com/dewakuneiei/vidnux/main/docs/index.html",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Linux",
+  "codeRepository": "https://github.com/dewakuneiei/vidnux",
+  "downloadUrl": "https://github.com/dewakuneiei/vidnux",
+  "license": "https://github.com/dewakuneiei/vidnux/blob/main/LICENSE",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": {
+    "@type": "Person",
+    "name": "dewakuneiei",
+    "url": "https://github.com/dewakuneiei"
+  }
+}
+</script>
+
 <style>
   :root {
     --bg:        #0e1016;
@@ -77,6 +121,30 @@
   .hero p.tag { margin: 20px 0 0; font-size: clamp(1rem, 2.5vw, 1.2rem); color: #c3cbdb; max-width: 46ch; }
   .hero .by { margin-top: 30px; font-size: .92rem; color: #8b95ab; }
   .hero .by a { color: #c3cbdb; }
+
+  .gh-btn {
+    position: absolute;
+    top: 24px; right: 24px;
+    display: inline-flex; align-items: center; gap: 9px;
+    text-decoration: none;
+    color: #e6eaf2;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px;
+    padding: 9px 18px 9px 14px;
+    font-size: .88rem; font-weight: 600;
+    backdrop-filter: blur(6px);
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .gh-btn:hover {
+    background: rgba(255,255,255,.12);
+    border-color: rgba(255,255,255,.32);
+    transform: translateY(-1px);
+  }
+  .gh-btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  @media (max-width: 640px) {
+    .gh-btn { position: static; margin: 0 0 26px; }
+  }
 
   /* ---------- layout ---------- */
   main { padding: 56px 0 24px; }
@@ -177,6 +245,14 @@
   <div class="strip top" id="stripTop"></div>
   <div class="strip bot" id="stripBot"></div>
   <div class="hero-inner">
+    <a class="gh-btn" href="https://github.com/dewakuneiei/vidnux" rel="noopener" aria-label="View Vidnux on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58
+        1.26.82.74 1.24 1.91.89 2.38.68.07-.53.29-.89.53-1.09-1.85-.21-3.79-.92-3.79-4.1 0-.91.32-1.65.85-2.23-.09-.21-.37-1.05.08-2.18
+        0 0 .69-.22 2.27.85a7.7 7.7 0 0 1 4.14 0c1.58-1.07 2.27-.85 2.27-.85.45 1.13.17 1.97.08 2.18.53.58.85 1.31.85 2.23 0 3.19-1.94
+        3.88-3.79 4.09.3.26.56.76.56 1.53 0 1.11-.01 1.99-.01 2.27 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      View on GitHub
+    </a>
     <h1>Vidnux</h1>
     <div class="ver">0.1.0</div>
     <p class="tag">A queue-based video converter for Linux that hands your footage to an editor without touching a single pixel it did not have to.</p>
@@ -382,17 +458,22 @@ ffmpeg -i <span class="k">input.mkv</span> \
 <section>
   <h2><span class="num">06</span>Made by dewakuneiei</h2>
   <div class="links">
-    <a href="https://github.com/dewakuneiei">
+    <a href="https://github.com/dewakuneiei/vidnux" rel="noopener">
       <span class="what">Source &amp; issues</span>
+      <span class="who">github.com/dewakuneiei/vidnux</span>
+      <span class="url">star it, fork it, open an issue</span>
+    </a>
+    <a href="https://github.com/dewakuneiei" rel="noopener">
+      <span class="what">Author</span>
       <span class="who">GitHub</span>
       <span class="url">github.com/dewakuneiei</span>
     </a>
-    <a href="https://www.youtube.com/@dewakuneiei">
+    <a href="https://www.youtube.com/@dewakuneiei" rel="noopener">
       <span class="what">Video</span>
       <span class="who">YouTube</span>
       <span class="url">youtube.com/@dewakuneiei</span>
     </a>
-    <a href="https://www.dewakuneiei.com">
+    <a href="https://www.dewakuneiei.com" rel="noopener">
       <span class="what">Everything else</span>
       <span class="who">dewakuneiei.com</span>
       <span class="url">www.dewakuneiei.com</span>
