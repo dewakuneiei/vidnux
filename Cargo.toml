@@ -1,0 +1,39 @@
+[package]
+name = "vidnux"
+version = "0.1.0"
+edition = "2021"
+description = "Clean queue-based video converter that keeps your quality (DaVinci Resolve friendly)"
+license = "MIT"
+
+[dependencies]
+eframe = { version = "0.32", default-features = false, features = [
+    "accesskit",     # screen-reader / a11y support, like a native app
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+# Pulled in only to switch on winit's Adwaita client-side decorations, so the
+# title bar and its minimise / maximise / close buttons follow the desktop
+# theme on Wayland (GNOME, KDE, …) instead of being drawn plain.
+winit = { version = "0.30", default-features = false, features = [
+    "rwh_06",
+    "x11",
+    "wayland",
+    "wayland-dlopen",
+    "wayland-csd-adwaita",
+] }
+egui = "0.32"
+# Only for PR_SET_PDEATHSIG on the desktop-theme watcher, so its helper
+# process can never outlive the app. Already in the tree via winit and rfd.
+libc = "0.2"
+rfd = "0.17"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Rasterises `assets/splash.svg` for the start-up banner.
+egui_extras = { version = "0.32", default-features = false, features = ["svg"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

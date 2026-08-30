@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vidnux — how it converts without losing your footage</title>
+<meta name="description" content="Vidnux is a queue-based video converter for Linux that never rescales, never re-times and never re-grades your footage. Built with Rust and egui, driving ffmpeg.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎞️</text></svg>">
+<style>
+  :root {
+    --bg:        #0e1016;
+    --bg-soft:   #151922;
+    --card:      #171c26;
+    --line:      #262d3b;
+    --ink:       #e6eaf2;
+    --ink-dim:   #98a2b8;
+    --ink-faint: #6b7488;
+    --accent:    #7aa2f7;
+    --gold:      #e6b45a;
+    --ok:        #7ec88c;
+    --bad:       #e87676;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --wrap: 860px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:        #f7f8fb;
+      --bg-soft:   #eef1f6;
+      --card:      #ffffff;
+      --line:      #dfe4ec;
+      --ink:       #171c26;
+      --ink-dim:   #4d5568;
+      --ink-faint: #7a8398;
+      --accent:    #2664d6;
+      --gold:      #965f0a;
+      --ok:        #1a8242;
+      --bad:       #be2c2c;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.7 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  code, kbd { font-family: var(--mono); font-size: 0.88em; }
+  :is(h1,h2,h3) { line-height: 1.22; letter-spacing: -0.015em; }
+
+  .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- banner ---------- */
+  header.hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(60% 120% at 78% 55%, rgba(122,162,247,.30), transparent 68%),
+      linear-gradient(135deg, #0e1016, #141821 52%, #1b2130);
+    border-bottom: 1px solid var(--line);
+    color: #e6eaf2;
+  }
+  .hero .strip { position:absolute; left:0; right:0; height:34px; background:rgba(0,0,0,.34); }
+  .hero .strip.top { top: 0; }
+  .hero .strip.bot { bottom: 0; }
+  .hero .strip i {
+    position: absolute; top: 9px; width: 20px; height: 15px;
+    border-radius: 4px; background: rgba(122,162,247,.12);
+  }
+  .hero-inner { position: relative; padding: 84px 24px 66px; max-width: var(--wrap); margin: 0 auto; }
+  .hero h1 { margin: 0; font-size: clamp(2.6rem, 8vw, 4rem); font-weight: 800; }
+  .hero .ver { color: #96a0b8; font-size: 1.35rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .hero p.tag { margin: 20px 0 0; font-size: clamp(1rem, 2.5vw, 1.2rem); color: #c3cbdb; max-width: 46ch; }
+  .hero .by { margin-top: 30px; font-size: .92rem; color: #8b95ab; }
+  .hero .by a { color: #c3cbdb; }
+
+  /* ---------- layout ---------- */
+  main { padding: 56px 0 24px; }
+  section { padding: 30px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: 0; padding-top: 0; }
+  h2 { font-size: 1.55rem; margin: 0 0 6px; }
+  h2 .num { color: var(--accent); font-family: var(--mono); font-size: .78em; margin-right: .55em; }
+  h3 { font-size: 1.05rem; margin: 26px 0 6px; }
+  .lede { color: var(--ink-dim); margin-top: 0; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin: 18px 0;
+  }
+
+  ul.claims { list-style: none; margin: 18px 0 0; padding: 0; }
+  ul.claims li {
+    border-left: 3px solid var(--accent);
+    background: var(--bg-soft);
+    border-radius: 0 10px 10px 0;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  ul.claims b { display: block; margin-bottom: 2px; }
+  ul.claims p { margin: 0; color: var(--ink-dim); font-size: .95rem; }
+
+  .caveat { border-left-color: var(--gold); }
+  .caveat b { color: var(--gold); }
+
+  .scroll { overflow-x: auto; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: .93rem; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-faint); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td code { color: var(--accent); }
+
+  pre {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: .84rem;
+    line-height: 1.6;
+    margin: 14px 0;
+  }
+  pre .c { color: var(--ink-faint); }
+  pre .k { color: var(--gold); }
+
+  .pipe { display: grid; gap: 10px; margin: 20px 0; }
+  .pipe .step {
+    display: grid; grid-template-columns: 30px 1fr; gap: 14px; align-items: start;
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 10px; padding: 13px 16px;
+  }
+  .pipe .n {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--accent); color: #0e1016;
+    font-weight: 700; font-size: .85rem; font-family: var(--mono);
+  }
+  .pipe b { display: block; }
+  .pipe p { margin: 2px 0 0; color: var(--ink-dim); font-size: .93rem; }
+
+  .stack { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+  .stack li {
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 15px; font-size: .87rem; background: var(--bg-soft);
+  }
+  .stack li b { color: var(--accent); font-weight: 600; }
+
+  .links { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 20px; }
+  .links a {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .links a:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .links .what { display: block; font-size: .76rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-faint); }
+  .links .who  { display: block; font-weight: 600; margin-top: 3px; }
+  .links .url  { display: block; font-family: var(--mono); font-size: .76rem; color: var(--accent); margin-top: 5px; word-break: break-all; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    margin-top: 40px; padding: 30px 0 60px;
+    color: var(--ink-faint); font-size: .88rem;
+  }
+  footer p { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="strip top" id="stripTop"></div>
+  <div class="strip bot" id="stripBot"></div>
+  <div class="hero-inner">
+    <h1>Vidnux</h1>
+    <div class="ver">0.1.0</div>
+    <p class="tag">A queue-based video converter for Linux that hands your footage to an editor without touching a single pixel it did not have to.</p>
+    <p class="by">
+      Created by <a href="https://github.com/dewakuneiei">dewakuneiei</a>
+      · MIT licensed · powered by <a href="https://ffmpeg.org">ffmpeg</a>
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section>
+  <h2><span class="num">01</span>What it is for</h2>
+  <p class="lede">The short version, and the reason it exists.</p>
+  <p>
+    The free build of <b>DaVinci Resolve on Linux</b> ships without an H.264/H.265 decoder and
+    without an AAC decoder. That is a licensing gap, not a bug — but the result is that most
+    phone and camera files import as offline, silent, or refuse to import at all.
+  </p>
+  <p>
+    Vidnux converts them to a format Resolve always accepts — <b>DNxHR in a MOV with PCM audio</b> —
+    and does it for a whole folder at a time. Unlike the older DNxHD, DNxHR has no fixed table of
+    permitted resolutions and frame rates, so 48 fps, 60 fps and 23.976 fps footage all pass
+    through untouched at whatever size they already are.
+  </p>
+  <p>It converts to seven other formats too, but that is the case it was built for.</p>
+</section>
+
+<section>
+  <h2><span class="num">02</span>What it will never do to your footage</h2>
+  <p class="lede">
+    Every preset in Vidnux is built around one rule: <b>never resample, never resize, never re-time.</b>
+    These are not settings you have to find — they are how the ffmpeg arguments are assembled,
+    and several of them are enforced by tests in the repository.
+  </p>
+
+  <ul class="claims">
+    <li>
+      <b>Resolution is never changed.</b>
+      <p>
+        No scaling filter is ever added to the command. If a source has odd dimensions that a
+        codec cannot accept, it is <i>padded</i> by a single pixel rather than resampled — so no
+        existing pixel is ever recomputed. A test in <code>preset.rs</code> fails the build if a
+        <code>scale</code> filter ever appears.
+      </p>
+    </li>
+    <li>
+      <b>Frame rate is never changed.</b>
+      <p>
+        60, 50, 48, 30, 25, 24 and 23.976 fps all come out exactly as they went in. There is no
+        <code>-r</code> and no <code>fps</code> filter anywhere. Editing formats are written as
+        constant frame rate so a timeline stays in sync with variable-frame-rate phone recordings,
+        but the <i>rate</i> itself is the source's own.
+      </p>
+    </li>
+    <li>
+      <b>Colour is carried over, not guessed.</b>
+      <p>
+        Primaries, transfer characteristics, matrix and range are read off the source with
+        <code>ffprobe</code> and written explicitly onto the output. This is what stops the
+        washed-out or over-saturated result you get when a converter drops the tags and the
+        player falls back to a guess.
+      </p>
+    </li>
+    <li>
+      <b>Bit depth is kept.</b>
+      <p>
+        A 10-bit source stays 10-bit. Where a codec genuinely cannot carry it, Vidnux picks the
+        closest pixel format that codec supports rather than silently dropping to 8-bit.
+      </p>
+    </li>
+    <li>
+      <b>Audio is copied, not re-encoded.</b>
+      <p>
+        Whenever the target container can carry the source's audio stream as-is, it is copied
+        byte for byte. When it cannot, it goes to PCM or FLAC — both lossless — never down to a
+        lossy bitrate.
+      </p>
+    </li>
+    <li>
+      <b>Every track survives.</b>
+      <p>
+        All audio tracks, subtitles in MKV, and file metadata are carried across when you leave
+        <i>Keep every audio / subtitle track</i> ticked.
+      </p>
+    </li>
+    <li>
+      <b>The source file is never modified.</b>
+      <p>
+        Vidnux only ever writes new files. If an output name is already taken it becomes
+        <code>name(1).mov</code>, <code>name(2).mov</code> and so on — nothing is overwritten
+        unless you explicitly ask for it.
+      </p>
+    </li>
+    <li class="caveat">
+      <b>The honest caveat.</b>
+      <p>
+        DNxHR, ProRes, AV1, H.264 and H.265 are compressed formats. At the default
+        <i>Visually lossless</i> setting the result is not bit-identical to the source — it is
+        indistinguishable by eye and safe to grade and re-render from. If you need
+        <i>mathematically</i> identical output, use <b>FFV1 / MKV</b> or <b>Ut Video / AVI</b>,
+        or the <i>Lossless</i> quality tier for H.264 / H.265 / AV1. Those are the only settings
+        that are pixel-for-pixel identical, and they are much larger files.
+      </p>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="num">03</span>How a conversion actually runs</h2>
+  <p class="lede">Nothing is hidden — you can read the exact command for any file before you start.</p>
+
+  <div class="pipe">
+    <div class="step"><div class="n">1</div><div>
+      <b>Inspect</b>
+      <p><code>ffprobe</code> reads the real resolution, frame rate, codec, pixel format, audio codec and every colour tag from the source.</p>
+    </div></div>
+    <div class="step"><div class="n">2</div><div>
+      <b>Assemble</b>
+      <p>The chosen target turns that into an argument list. Geometry and timing arguments are simply never emitted; colour and bit-depth arguments are copied from what step 1 found.</p>
+    </div></div>
+    <div class="step"><div class="n">3</div><div>
+      <b>Claim a name</b>
+      <p>The output path is checked against the source, against every other job in the run, and against what is already on disk, before a single byte is written.</p>
+    </div></div>
+    <div class="step"><div class="n">4</div><div>
+      <b>Encode</b>
+      <p>One <code>ffmpeg</code> process per job. Its progress output is parsed live into the percentage and the realtime multiplier you see on the row. Two to eight jobs run at once, as you choose.</p>
+    </div></div>
+  </div>
+
+  <h3>See it for yourself</h3>
+  <p>In the app: left panel → <b>Advanced</b> → <i>Show the ffmpeg command per file</i>. A DNxHR job looks roughly like this:</p>
+<pre><span class="c"># no -s, no -vf scale, no -r, no fps filter — by construction</span>
+ffmpeg -i <span class="k">input.mkv</span> \
+  -c:v dnxhd -profile:v dnxhr_hq -pix_fmt yuv422p \
+  -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+  -c:a pcm_s16le \
+  -map 0 -movflags +write_colr \
+  <span class="k">output.mov</span></pre>
+</section>
+
+<section>
+  <h2><span class="num">04</span>Output formats</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Format</th><th>Encoder</th><th>Reach for it when</th></tr></thead>
+      <tbody>
+        <tr><td><b>DNxHR / MOV</b> <em>(default)</em></td><td><code>dnxhd</code> + PCM</td><td>DaVinci Resolve, Kdenlive, Premiere. Any resolution, any frame rate.</td></tr>
+        <tr><td>ProRes / MOV</td><td><code>prores_ks</code> + PCM</td><td>Same idea, when the project also travels to macOS.</td></tr>
+        <tr><td>AV1 / MP4 · AV1 / MKV</td><td><code>libsvtav1</code></td><td>Smallest modern delivery files. Slow to encode, heavy to scrub.</td></tr>
+        <tr><td>H.264 / MP4</td><td><code>libx264</code></td><td>Plays on literally everything.</td></tr>
+        <tr><td>H.265 / MP4</td><td><code>libx265</code></td><td>Roughly half the size of H.264, keeps 10-bit sources 10-bit.</td></tr>
+        <tr><td>Ut Video / AVI</td><td><code>utvideo</code> + PCM</td><td>Mathematically lossless, in an AVI.</td></tr>
+        <tr><td>FFV1 / MKV</td><td><code>ffv1</code></td><td>Mathematically lossless archival master.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Vidnux checks which of these your ffmpeg was actually built with while the start-up banner is
+    on screen, and greys out the ones it cannot produce. Plain Fedora's <code>ffmpeg-free</code>,
+    for example, has no x264 or x265 — so those two are unavailable until you swap in the full
+    RPM Fusion build.
+  </p>
+  <p><b>Inputs:</b> anything ffmpeg can read — mp4, mov, mkv, avi, wmv, flv, mpg, mts/m2ts, ts, mxf, webm, 3gp, ogv, vob, dv, y4m, gif and more.</p>
+</section>
+
+<section>
+  <h2><span class="num">05</span>Technology</h2>
+  <p class="lede">Small on purpose. One binary, no runtime, no bundled browser.</p>
+  <ul class="stack">
+    <li><b>Rust</b> · 2021 edition</li>
+    <li><b>egui / eframe</b> · immediate-mode interface</li>
+    <li><b>glow</b> · OpenGL rendering</li>
+    <li><b>winit</b> · Wayland &amp; X11</li>
+    <li><b>ffmpeg</b> · every decode and encode</li>
+    <li><b>ffprobe</b> · source inspection</li>
+    <li><b>resvg</b> · the banner artwork</li>
+    <li><b>rfd</b> · native file dialogs</li>
+  </ul>
+
+  <div class="card">
+    <h3 style="margin-top:0">Design notes</h3>
+    <p>
+      <b>ffmpeg is called as a process, not linked as a library.</b> That keeps Vidnux free of
+      any codec licensing question of its own, lets it use whatever ffmpeg your distribution
+      already trusts, and means the command it runs is one you can copy into a terminal and
+      check yourself.
+    </p>
+    <p>
+      <b>The interface follows your desktop.</b> Light or dark is read from the XDG desktop
+      portal, then <code>gsettings</code>, then <code>GTK_THEME</code> — and it follows a change
+      live, without a restart. If none of them answer, it stays light.
+    </p>
+    <p style="margin-bottom:0">
+      <b>No telemetry, no network calls, no account.</b> The only thing Vidnux ever reaches for
+      outside your machine is this page, and only when you press the <b>?</b> button.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">06</span>Made by dewakuneiei</h2>
+  <div class="links">
+    <a href="https://github.com/dewakuneiei">
+      <span class="what">Source &amp; issues</span>
+      <span class="who">GitHub</span>
+      <span class="url">github.com/dewakuneiei</span>
+    </a>
+    <a href="https://www.youtube.com/@dewakuneiei">
+      <span class="what">Video</span>
+      <span class="who">YouTube</span>
+      <span class="url">youtube.com/@dewakuneiei</span>
+    </a>
+    <a href="https://www.dewakuneiei.com">
+      <span class="what">Everything else</span>
+      <span class="who">dewakuneiei.com</span>
+      <span class="url">www.dewakuneiei.com</span>
+    </a>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p><b>Vidnux 0.1.0</b> — MIT licensed. Clone it, change it, ship it.</p>
+  <p>Vidnux is not affiliated with Blackmagic Design, HandBrake or the FFmpeg project.</p>
+</footer>
+
+<script>
+  // Sprocket holes along the banner edges, spaced to the viewport.
+  for (const id of ['stripTop', 'stripBot']) {
+    const strip = document.getElementById(id);
+    const n = Math.ceil(window.innerWidth / 56) + 1;
+    for (let i = 0; i < n; i++) {
+      const hole = document.createElement('i');
+      hole.style.left = (i * 56 + 17) + 'px';
+      strip.appendChild(hole);
+    }
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Artwork for the start-up banner, 1000x460 to match the banner window exactly.
+
+  Laid out the way a splash has to be: the left third stays dark and quiet so
+  the wordmark, version and loading line stay readable on it, and everything
+  illustrative lives to the right of x=420.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" width="1000" height="460">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"    stop-color="#0e1016"/>
+      <stop offset="0.5"  stop-color="#141821"/>
+      <stop offset="1"    stop-color="#1b2130"/>
+    </linearGradient>
+
+    <!-- Heat off the anvil, kept right of centre. -->
+    <radialGradient id="glow" cx="0.74" cy="0.55" r="0.58">
+      <stop offset="0"    stop-color="#7aa2f7" stop-opacity="0.34"/>
+      <stop offset="0.45" stop-color="#5b7fd4" stop-opacity="0.14"/>
+      <stop offset="1"    stop-color="#7aa2f7" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Keeps the text side dark no matter how bright the right side gets. -->
+    <linearGradient id="scrim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#0b0d12" stop-opacity="0.92"/>
+      <stop offset="0.38" stop-color="#0b0d12" stop-opacity="0.55"/>
+      <stop offset="0.68" stop-color="#0b0d12" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="ember" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0"   stop-color="#e6b45a" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#e6b45a" stop-opacity="0.20"/>
+      <stop offset="1"   stop-color="#e87676" stop-opacity="0.10"/>
+    </linearGradient>
+
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7aa2f7" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#e6b45a" stop-opacity="0.7"/>
+    </linearGradient>
+
+    <!-- Sprocket holes, the way a film strip reads. -->
+    <pattern id="perf" x="0" y="0" width="56" height="40" patternUnits="userSpaceOnUse">
+      <rect x="17" y="12" width="22" height="16" rx="4" fill="#7aa2f7" opacity="0.11"/>
+    </pattern>
+  </defs>
+
+  <rect width="1000" height="460" fill="url(#ground)"/>
+  <rect width="1000" height="460" fill="url(#glow)"/>
+
+  <!-- Timeline: the frames being cut, thinning out towards the left. -->
+  <g fill="#7aa2f7">
+    <rect x="440" y="150" width="86" height="52" rx="3" opacity="0.05"/>
+    <rect x="534" y="150" width="86" height="52" rx="3" opacity="0.07"/>
+    <rect x="628" y="150" width="86" height="52" rx="3" opacity="0.10"/>
+    <rect x="722" y="150" width="86" height="52" rx="3" opacity="0.13"/>
+    <rect x="816" y="150" width="86" height="52" rx="3" opacity="0.16"/>
+    <rect x="440" y="214" width="86" height="52" rx="3" opacity="0.04"/>
+    <rect x="534" y="214" width="86" height="52" rx="3" opacity="0.05"/>
+    <rect x="628" y="214" width="86" height="52" rx="3" opacity="0.07"/>
+    <rect x="722" y="214" width="86" height="52" rx="3" opacity="0.09"/>
+    <rect x="816" y="214" width="86" height="52" rx="3" opacity="0.11"/>
+  </g>
+
+  <!-- The forge: an anvil with sparks lifting off it. -->
+  <g opacity="0.55" transform="translate(690 292) scale(1.5)">
+    <path d="M6 74 h108 l-10 22 H16 Z" fill="#080a0f" opacity="0.6"/>
+    <path d="M0 34 h132 l-16 26 H44 l-6 16 H26 l8 -22 H10 Z" fill="#2c3446"/>
+    <path d="M0 34 h132 l-6 10 H4 Z" fill="#3d4761"/>
+    <g fill="#e6b45a">
+      <circle cx="26"  cy="18" r="3.5" opacity="0.9"/>
+      <circle cx="48"  cy="4"  r="2.5" opacity="0.75"/>
+      <circle cx="70"  cy="15" r="2"   opacity="0.6"/>
+      <circle cx="92"  cy="2"  r="3"   opacity="0.65"/>
+      <circle cx="112" cy="19" r="2"   opacity="0.5"/>
+    </g>
+  </g>
+
+  <!-- Warm floor. -->
+  <rect x="0" y="330" width="1000" height="130" fill="url(#ember)"/>
+
+  <!-- Film strip, top and bottom, full width. -->
+  <rect x="0" y="0"   width="1000" height="40" fill="#000" opacity="0.34"/>
+  <rect x="0" y="420" width="1000" height="40" fill="#000" opacity="0.34"/>
+  <rect x="0" y="0"   width="1000" height="40" fill="url(#perf)"/>
+  <rect x="0" y="420" width="1000" height="40" fill="url(#perf)"/>
+
+  <!-- The scrim goes last so nothing illustrative bleeds under the wordmark. -->
+  <rect width="1000" height="460" fill="url(#scrim)"/>
+
+  <!-- Accent edge along the very bottom. -->
+  <rect x="0" y="456" width="1000" height="4" fill="url(#bar)"/>
+</svg>
