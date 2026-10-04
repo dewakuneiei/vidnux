@@ -71,6 +71,12 @@ install -Dm755 target/release/vidnux "$BIN/vidnux"
 install -Dm644 vidnux.desktop "$APPS/vidnux.desktop"
 install -Dm644 vidnux.svg "$ICONS/vidnux.svg"
 
+# Vidnux is an optional tool: it must not be a default video handler.
+# Remove any association left behind by earlier versions.
+for f in "${XDG_CONFIG_HOME:-$HOME/.config}/mimeapps.list" "$APPS/mimeapps.list"; do
+  [ -f "$f" ] && sed -i 's/vidnux\.desktop;\?//g' "$f" || true
+done
+
 command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" 2>/dev/null || true
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -qtf "$(dirname "$(dirname "$(dirname "$ICONS")")")" 2>/dev/null || true
 

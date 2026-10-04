@@ -9,5 +9,4 @@ Terminal=false
 StartupWMClass=vidnux
 StartupNotify=true
 Categories=AudioVideo;Video;AudioVideoEditing;
-MimeType=video/mp4;video/x-matroska;video/quicktime;video/x-msvideo;video/mpeg;video/x-ms-wmv;video/webm;video/mp2t;
 Keywords=video;convert;transcode;ffmpeg;davinci;resolve;proxy;
