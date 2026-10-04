@@ -7,7 +7,8 @@ cd "$(dirname "$(readlink -f "$0")")"
 if [[ "${1:-}" == "--system" ]]; then
   PREFIX=${PREFIX:-/usr/local}
   FILES=("$PREFIX/bin/vidnux" "$PREFIX/share/applications/vidnux.desktop" \
-         "$PREFIX/share/icons/hicolor/scalable/apps/vidnux.svg")
+         "$PREFIX/share/icons/hicolor/scalable/apps/vidnux.svg" \
+         "$PREFIX/share/vidnux/docs/index.html")
   APPS="$PREFIX/share/applications"
   if [[ $EUID -ne 0 ]]; then
     echo "--system needs root:  sudo ./uninstall.sh --system" >&2
@@ -15,7 +16,8 @@ if [[ "${1:-}" == "--system" ]]; then
   fi
 else
   FILES=("$HOME/.local/bin/vidnux" "$HOME/.local/share/applications/vidnux.desktop" \
-         "$HOME/.local/share/icons/hicolor/scalable/apps/vidnux.svg")
+         "$HOME/.local/share/icons/hicolor/scalable/apps/vidnux.svg" \
+         "$HOME/.local/share/vidnux/docs/index.html")
   APPS="$HOME/.local/share/applications"
 fi
 

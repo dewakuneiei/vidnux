@@ -2,6 +2,7 @@
 
 mod app;
 mod boot;
+mod cover;
 mod job;
 mod media;
 mod preset;

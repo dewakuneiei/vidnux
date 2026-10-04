@@ -1,6 +1,7 @@
 //! The egui front end: settings on the left, the queue in the middle.
 
 use crate::boot;
+use crate::media;
 use crate::job::{self, Job, Runner, Status};
 use crate::preset::{self, Profile, Settings, Target, AUDIOS, PROFILES, QUALITIES, TARGETS};
 use crate::splash;
@@ -11,7 +12,17 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+#[derive(Clone, Copy, PartialEq)]
+enum Screen {
+    Home,
+    Convert,
+    Cover,
+}
+
 pub struct App {
+    screen: Screen,
+    cover: crate::cover::Cover,
+    rename_help: bool,
     runner: Runner,
     out_dir: Option<PathBuf>,
     rename_pattern: String,
@@ -38,6 +49,9 @@ impl App {
         // Lets the banner load `assets/splash.svg`.
         egui_extras::install_image_loaders(&cc.egui_ctx);
         Self {
+            screen: Screen::Home,
+            cover: crate::cover::Cover::new(),
+            rename_help: false,
             runner: Runner::new(),
             out_dir: None,
             rename_pattern: "{name}".to_string(),
@@ -154,13 +168,7 @@ impl App {
                 .as_ref()
                 .map(|i| (format!("{}p", i.height), format!("{:.0}fps", i.fps)))
                 .unwrap_or_default();
-            let width = total.to_string().len();
-            job.stem = self
-                .rename_pattern
-                .replace("{name}", &name)
-                .replace("{n}", &format!("{:0width$}", i + 1, width = width))
-                .replace("{res}", &res)
-                .replace("{fps}", &fps);
+            job.stem = render_stem(&self.rename_pattern, &name, &res, &fps, i, total);
         }
 
         let mut totals: HashMap<String, usize> = HashMap::new();
@@ -228,6 +236,134 @@ impl App {
         // Keep the row the user is moving in view, so holding the button walks
         // it up or down the list without losing sight of it.
         self.scroll_to = Some(id);
+    }
+
+    fn home(&mut self, ctx: &egui::Context, pal: &Palette) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space((ui.available_height() * 0.18).max(20.0));
+                ui.label(egui::RichText::new(splash::NAME).size(30.0).strong());
+                ui.label(egui::RichText::new("What would you like to do?").weak().size(15.0));
+                ui.add_space(24.0);
+            });
+            let gap = 18.0;
+            let w = ((ui.available_width() - gap) / 2.0).min(380.0);
+            let total = w * 2.0 + gap;
+            ui.horizontal(|ui| {
+                ui.add_space(((ui.available_width() - total) / 2.0).max(0.0));
+                if home_card(
+                    ui,
+                    pal,
+                    w,
+                    "Convert videos",
+                    "Turn footage into editor-ready files (DNxHR, ProRes, H.264 …) with the quality and frame rate kept.",
+                ) {
+                    self.screen = Screen::Convert;
+                }
+                ui.add_space(gap - ui.spacing().item_spacing.x);
+                if home_card(
+                    ui,
+                    pal,
+                    w,
+                    "Cover art",
+                    "Choose a picture and set it as a video's thumbnail. The video is copied, not re-encoded.",
+                ) {
+                    self.screen = Screen::Cover;
+                }
+            });
+        });
+    }
+
+    fn rename_help_modal(&mut self, ctx: &egui::Context, pal: &Palette) {
+        if !self.rename_help {
+            return;
+        }
+        let modal = egui::Modal::new(egui::Id::new("rename-help")).show(ctx, |ui| {
+            ui.set_width(480.0_f32.min(ctx.screen_rect().width() - 80.0));
+            ui.heading("Rename all — how to use it");
+            ui.add_space(6.0);
+            ui.label(
+                "Type a pattern, press Apply to all, and every file in the queue gets a new \
+                 output name. You can still edit any single name afterwards.",
+            );
+
+            ui.add_space(10.0);
+            ui.label(egui::RichText::new("Placeholders").strong());
+            egui::Grid::new("rename-tokens")
+                .num_columns(2)
+                .spacing([16.0, 6.0])
+                .show(ui, |ui| {
+                    for (token, what) in [
+                        ("{name}", "the original file name"),
+                        ("{n}", "position in the queue: 1, 2, 3 …"),
+                        ("{n+1}", "position, starting at 2 (any number works: {n+3} starts at 4)"),
+                        ("{n-1}", "position, starting at 0"),
+                        ("{res}", "video height, like 1080p"),
+                        ("{fps}", "frame rate, like 30fps"),
+                    ] {
+                        ui.label(egui::RichText::new(token).monospace().color(pal.accent));
+                        ui.label(what);
+                        ui.end_row();
+                    }
+                });
+
+            ui.add_space(10.0);
+            ui.label(egui::RichText::new("Examples").strong());
+            ui.label(egui::RichText::new("for files  clipA, clipB, clipC").weak());
+            egui::Grid::new("rename-examples")
+                .num_columns(3)
+                .spacing([16.0, 6.0])
+                .show(ui, |ui| {
+                    for pattern in ["{name}_proxy", "scene_{n}", "scene_{n+1}", "shot{n+9}_{res}"] {
+                        let result = ["clipA", "clipB", "clipC"]
+                            .iter()
+                            .enumerate()
+                            .map(|(i, n)| render_stem(pattern, n, "1080p", "30fps", i, 3))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        ui.label(egui::RichText::new(pattern).monospace().color(pal.accent));
+                        ui.label("→");
+                        ui.label(egui::RichText::new(result).monospace());
+                        ui.end_row();
+                    }
+                });
+
+            ui.add_space(10.0);
+            ui.label(egui::RichText::new("Good to know").strong());
+            ui.label("•  Numbers are padded so files sort correctly (01 … 10).");
+            ui.label("•  If two files end up with the same name, -1, -2 … is added.");
+            ui.label("•  Sort A-Z / Z-A first if you want the numbers in name order.");
+            ui.label("•  The extension is added for you; do not type it.");
+
+            ui.add_space(12.0);
+            if ui.button("  Got it  ").clicked() {
+                ui.close();
+            }
+        });
+        if modal.should_close() {
+            self.rename_help = false;
+        }
+    }
+
+    /// Predicted bytes for the jobs still to run, the free space where they
+    /// will be written, and how many jobs could not be estimated. `None` when
+    /// nothing is waiting.
+    fn space_forecast(&self) -> Option<(u64, Option<u64>, usize)> {
+        let settings = self.settings();
+        let q = self.runner.queue.lock().unwrap();
+        let (mut need, mut unknown, mut any) = (0u64, 0usize, false);
+        let mut dir = self.out_dir.clone();
+        for job in q.jobs.iter().filter(|j| !j.status.is_finished()) {
+            any = true;
+            match &job.info {
+                Some(i) => need += preset::estimate_bytes(i, &settings),
+                None => unknown += 1,
+            }
+            if dir.is_none() {
+                dir = job.input.parent().map(|p| p.to_path_buf());
+            }
+        }
+        any.then(|| (need, dir.and_then(|d| free_space(&d)), unknown))
     }
 
     /// Queue totals for the status strip.
@@ -322,7 +458,14 @@ impl eframe::App for App {
                 .collect()
         });
         if !dropped.is_empty() {
-            self.add_paths(dropped, ctx);
+            match self.screen {
+                Screen::Cover => self.cover.accept(dropped, ctx),
+                // Dropping videos on the home screen is a clear enough wish.
+                _ => {
+                    self.screen = Screen::Convert;
+                    self.add_paths(dropped, ctx);
+                }
+            }
         }
 
         // Panels must be declared outer-first: the bottom bar has to claim its
@@ -331,9 +474,23 @@ impl eframe::App for App {
         // painted over its last row — which is exactly why the final queue
         // entry used to be unreachable however far you scrolled.
         self.top_bar(ctx, &pal);
-        self.side_panel(ctx, &pal);
-        self.bottom_bar(ctx, &pal);
-        self.queue_panel(ctx, &pal);
+        match self.screen {
+            Screen::Home => self.home(ctx, &pal),
+            Screen::Convert => {
+                self.side_panel(ctx, &pal);
+                self.bottom_bar(ctx, &pal);
+                self.queue_panel(ctx, &pal);
+            }
+            Screen::Cover => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                        ui.add_space(4.0);
+                        self.cover.ui(ui, &pal);
+                    });
+                });
+            }
+        }
+        self.rename_help_modal(ctx, &pal);
 
         if self.runner.running.load(Ordering::SeqCst) {
             ctx.request_repaint_after(std::time::Duration::from_millis(250));
@@ -354,36 +511,43 @@ impl App {
                 ui.add_space(5.0);
                 ui.horizontal(|ui| {
                     ui.add_space(4.0);
-                    if ui.button("+  Add files").clicked() {
-                        let ctx = ui.ctx().clone();
-                        self.browse_files(&ctx);
+                    if self.screen != Screen::Home && ui.button("<  Home").clicked() {
+                        self.screen = Screen::Home;
                     }
-                    if ui.button("Add folder").clicked() {
-                        if let Some(dir) = rfd::FileDialog::new()
-                            .set_title("Add every video in a folder")
-                            .pick_folder()
-                        {
+                    if self.screen == Screen::Convert {
+                        ui.separator();
+                        if ui.button("+  Add files").clicked() {
                             let ctx = ui.ctx().clone();
-                            self.add_paths(vec![dir], &ctx);
+                            self.browse_files(&ctx);
                         }
-                    }
-                    ui.separator();
-                    if ui.button("Clear finished").clicked() {
-                        self.runner
-                            .queue
-                            .lock()
-                            .unwrap()
-                            .jobs
-                            .retain(|j| !j.status.is_finished());
-                    }
-                    if ui.button("Clear all").clicked() {
-                        self.runner.stop();
-                        self.runner.queue.lock().unwrap().jobs.clear();
-                    }
-                    let pending = *self.adding.lock().unwrap();
-                    if pending > 0 {
-                        ui.add(egui::Spinner::new().size(14.0));
-                        ui.label(egui::RichText::new(format!("reading {pending} file(s)…")).weak());
+                        if ui.button("Add folder").clicked() {
+                            if let Some(dir) = rfd::FileDialog::new()
+                                .set_title("Add every video in a folder")
+                                .pick_folder()
+                            {
+                                let ctx = ui.ctx().clone();
+                                self.add_paths(vec![dir], &ctx);
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Clear finished").clicked() {
+                            self.runner
+                                .queue
+                                .lock()
+                                .unwrap()
+                                .jobs
+                                .retain(|j| !j.status.is_finished());
+                        }
+                        if ui.button("Clear all").clicked() {
+                            self.runner.stop();
+                            self.runner.queue.lock().unwrap().jobs.clear();
+                        }
+                        let pending = *self.adding.lock().unwrap();
+                        if pending > 0 {
+                            ui.add(egui::Spinner::new().size(14.0));
+                            ui.label(egui::RichText::new(format!("reading {pending} file(s)…")).weak());
+                        }
+
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -396,10 +560,9 @@ impl App {
                         if ui
                             .button("  ?  ")
                             .on_hover_text(format!(
-                                "About {} {} — what it does to your footage, and why.\nOpens {}",
+                                "About {} {} — what it does to your footage, and why.\nOpens the handbook in your browser.",
                                 splash::NAME,
                                 splash::VERSION,
-                                HANDBOOK
                             ))
                             .clicked()
                         {
@@ -679,10 +842,27 @@ impl App {
                                 // working from a narrow window up to a wide one.
                                 let avail = ui.available_width();
                                 let status_w = (avail * 0.26).clamp(130.0, 200.0);
-                                let left_w =
-                                    (avail - status_w - ui.spacing().item_spacing.x).max(140.0);
+                                let thumb_w = if q.jobs[i].thumb.is_some() { 96.0 + ui.spacing().item_spacing.x } else { 0.0 };
+                                let left_w = (avail - status_w - thumb_w - ui.spacing().item_spacing.x).max(140.0);
 
                                 ui.horizontal_top(|ui| {
+                                    if let Some(px) = q.jobs[i].thumb.clone() {
+                                        let tex = q.jobs[i].thumb_tex.get_or_insert_with(|| {
+                                            ui.ctx().load_texture(
+                                                format!("thumb-{id}"),
+                                                egui::ColorImage::from_rgba_unmultiplied(
+                                                    [media::THUMB_W, media::THUMB_H],
+                                                    &px,
+                                                ),
+                                                egui::TextureOptions::LINEAR,
+                                            )
+                                        });
+                                        ui.add(
+                                            egui::Image::new(&*tex)
+                                                .fit_to_exact_size(egui::vec2(96.0, 54.0))
+                                                .corner_radius(4),
+                                        );
+                                    }
                                     ui.vertical(|ui| {
                                         ui.set_width(left_w);
                                         ui.horizontal(|ui| {
@@ -887,16 +1067,37 @@ impl App {
                 // The tally only. Every running row already draws its own
                 // percentage, so a second bar summarising them said nothing the
                 // queue was not already saying.
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(format!(
-                            "{} in queue · {} running · {} waiting · {} done",
-                            t.total, t.running, t.queued, t.done
-                        ))
-                        .weak(),
-                    )
-                    .truncate(),
-                );
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!(
+                                "{} in queue · {} running · {} waiting · {} done",
+                                t.total, t.running, t.queued, t.done
+                            ))
+                            .weak(),
+                        )
+                        .truncate(),
+                    );
+                    if let Some((need, free, unknown)) = self.space_forecast() {
+                        let tight = free.is_some_and(|f| need > f);
+                        let mut text = format!("· needs ~{}", human_bytes(need));
+                        if let Some(f) = free {
+                            text += &format!(" of {} free", human_bytes(f));
+                        }
+                        let color = if tight { pal.bad } else { pal.warn };
+                        ui.label(egui::RichText::new(text).color(color).strong())
+                            .on_hover_text(format!(
+                                "Estimated size of everything still waiting, from the current \
+                                 format and quality. Actual size depends on the footage, so \
+                                 keep some headroom.{}",
+                                if unknown > 0 {
+                                    format!(" {unknown} unreadable file(s) are not counted.")
+                                } else {
+                                    String::new()
+                                }
+                            ));
+                    }
+                });
 
                 ui.add_space(8.0);
 
@@ -975,14 +1176,37 @@ const HANDBOOK: &str = "https://raw.githack.com/dewakuneiei/vidnux/main/docs/ind
 /// Hand the URL to whatever the desktop uses for links. `xdg-open` covers every
 /// desktop that follows the freedesktop spec; the others are there for the ones
 /// that do not ship it.
+/// The handbook file on disk if there is one — the copy `install.sh` put in
+/// `share/vidnux/docs`, or the `docs/` folder of the checkout this was built
+/// from — otherwise the hosted copy.
+fn handbook_target() -> String {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let data = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home.map(|h| h.join(".local/share")));
+    let candidates = [
+        data.map(|d| d.join("vidnux/docs/index.html")),
+        Some(PathBuf::from("/usr/local/share/vidnux/docs/index.html")),
+        Some(PathBuf::from("/usr/share/vidnux/docs/index.html")),
+        Some(PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/index.html"))),
+    ];
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| HANDBOOK.to_string())
+}
+
 fn open_handbook() {
+    let target = handbook_target();
     for opener in ["xdg-open", "gio", "x-www-browser", "firefox"] {
         let mut cmd = std::process::Command::new(opener);
         if opener == "gio" {
             cmd.arg("open");
         }
         let spawned = cmd
-            .arg(HANDBOOK)
+            .arg(&target)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn();
@@ -1010,10 +1234,17 @@ impl App {
             egui::TextEdit::singleline(&mut self.rename_pattern)
                 .desired_width(field)
                 .hint_text("{name}_proxy"),
-        )
-        .on_hover_text("{name} source name · {n} position · {res} height · {fps} frame rate");
+        );
 
         let row = |ui: &mut egui::Ui, me: &mut Self| {
+            if ui
+                .small_button("?")
+                .on_hover_text("How to use Rename all")
+                .clicked()
+            {
+                me.rename_help = true;
+                ui.close();
+            }
             if ui.button("Apply to all").clicked() {
                 me.apply_pattern();
             }
@@ -1036,6 +1267,104 @@ impl App {
             ui.horizontal(|ui| row(ui, self));
         }
     }
+}
+
+/// Fill in every placeholder of the rename pattern for one row.
+fn render_stem(pattern: &str, name: &str, res: &str, fps: &str, index: usize, total: usize) -> String {
+    expand_counter(&pattern.replace("{name}", name), index, total)
+        .replace("{res}", res)
+        .replace("{fps}", fps)
+}
+
+/// A big clickable card for the home screen. True when clicked.
+fn home_card(ui: &mut egui::Ui, pal: &Palette, width: f32, title: &str, text: &str) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 170.0), egui::Sense::click());
+    let hot = resp.hovered();
+    ui.painter().rect(
+        rect,
+        10,
+        if hot { pal.row_hover } else { pal.row },
+        egui::Stroke::new(if hot { 1.5_f32 } else { 1.0_f32 }, if hot { pal.accent } else { pal.row_stroke }),
+        egui::StrokeKind::Inside,
+    );
+    let inner = rect.shrink(18.0);
+    let title_galley = ui.painter().layout_no_wrap(
+        title.to_string(),
+        egui::FontId::proportional(20.0),
+        pal.accent,
+    );
+    let body = ui.painter().layout(
+        text.to_string(),
+        egui::FontId::proportional(13.5),
+        ui.visuals().text_color(),
+        inner.width(),
+    );
+    let gap = 10.0;
+    ui.painter().galley(inner.min, title_galley.clone(), pal.accent);
+    ui.painter().galley(
+        inner.min + egui::vec2(0.0, title_galley.size().y + gap),
+        body,
+        ui.visuals().text_color(),
+    );
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+}
+
+/// Free bytes on the filesystem holding `dir`.
+fn free_space(dir: &std::path::Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
+    let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+    (unsafe { libc::statvfs(c.as_ptr(), &mut st) } == 0)
+        .then(|| st.f_bavail as u64 * st.f_frsize as u64)
+}
+
+fn human_bytes(b: u64) -> String {
+    const U: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let (mut v, mut i) = (b as f64, 0);
+    while v >= 1000.0 && i < U.len() - 1 {
+        v /= 1000.0;
+        i += 1;
+    }
+    if i < 3 { format!("{v:.0} {}", U[i]) } else { format!("{v:.1} {}", U[i]) }
+}
+
+/// Replace `{n}`, `{n+K}` and `{n-K}` with the row's position. `{n}` counts
+/// from 1; `{n+3}` counts from 4, `{n-1}` from 0. Numbers are zero-padded to
+/// the width of the largest one, so the files sort the way they read. A shift
+/// that would go below zero stops at 0.
+fn expand_counter(pattern: &str, index: usize, total: usize) -> String {
+    let mut out = String::new();
+    let mut rest = pattern;
+    while let Some(start) = rest.find("{n") {
+        let after = &rest[start + 2..];
+        let Some(end) = after.find('}') else { break };
+        let spec = &after[..end];
+        let shift: Option<i64> = match spec {
+            "" => Some(0),
+            _ => {
+                let (sign, digits) = spec.split_at(1);
+                match (sign, digits.parse::<i64>()) {
+                    ("+", Ok(k)) => Some(k),
+                    ("-", Ok(k)) => Some(-k),
+                    _ => None,
+                }
+            }
+        };
+        out.push_str(&rest[..start]);
+        match shift {
+            Some(k) => {
+                let n = |i: usize| (i as i64 + 1 + k).max(0);
+                let width = n(total.saturating_sub(1)).to_string().len();
+                out.push_str(&format!("{:0width$}", n(index), width = width));
+            }
+            // Not a counter (`{name}` is already gone, but `{nope}` is not
+            // ours): leave it as typed.
+            None => out.push_str(&rest[start..start + 2 + end + 1]),
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 fn heading(ui: &mut egui::Ui, text: &str) {
@@ -1097,8 +1426,18 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 #[cfg(test)]
 mod tests {
-    use super::{mix, natural_cmp, short};
+    use super::{expand_counter, mix, natural_cmp, short};
     use std::cmp::Ordering;
+
+    #[test]
+    fn counter_can_start_later() {
+        assert_eq!(expand_counter("clip_{n}", 0, 3), "clip_1");
+        assert_eq!(expand_counter("clip_{n+1}", 0, 3), "clip_2");
+        assert_eq!(expand_counter("clip_{n+3}", 2, 3), "clip_6");
+        assert_eq!(expand_counter("{n-1}", 0, 3), "0");
+        assert_eq!(expand_counter("{n+1}", 0, 9), "02");
+        assert_eq!(expand_counter("{nope}-{n}", 0, 3), "{nope}-1");
+    }
 
     #[test]
     fn numbers_sort_by_value_not_by_character() {

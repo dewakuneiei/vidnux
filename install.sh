@@ -12,6 +12,7 @@ if [[ $SYSTEM -eq 1 ]]; then
   BIN="$PREFIX/bin"
   APPS="$PREFIX/share/applications"
   ICONS="$PREFIX/share/icons/hicolor/scalable/apps"
+  DOCS="$PREFIX/share/vidnux/docs"
   if [[ $EUID -ne 0 ]]; then
     echo "--system needs root:  sudo ./install.sh --system" >&2
     exit 1
@@ -20,6 +21,7 @@ else
   BIN="$HOME/.local/bin"
   APPS="$HOME/.local/share/applications"
   ICONS="$HOME/.local/share/icons/hicolor/scalable/apps"
+  DOCS="$HOME/.local/share/vidnux/docs"
 fi
 
 # --- dependencies -----------------------------------------------------------
@@ -70,6 +72,8 @@ echo "==> Installing to $BIN"
 install -Dm755 target/release/vidnux "$BIN/vidnux"
 install -Dm644 vidnux.desktop "$APPS/vidnux.desktop"
 install -Dm644 vidnux.svg "$ICONS/vidnux.svg"
+# The in-app "?" opens this copy, so the handbook works offline.
+install -Dm644 docs/index.html "$DOCS/index.html"
 
 # Vidnux is an optional tool: it must not be a default video handler.
 # Remove any association left behind by earlier versions.

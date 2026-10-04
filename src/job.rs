@@ -24,7 +24,7 @@ impl Status {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Job {
     pub id: u64,
     pub input: PathBuf,
@@ -39,6 +39,10 @@ pub struct Job {
     pub pid: Option<u32>,
     pub cancel: bool,
     pub output: Option<PathBuf>,
+    /// RGBA pixels of the preview frame, `media::THUMB_W` x `THUMB_H`.
+    pub thumb: Option<Arc<Vec<u8>>>,
+    /// The uploaded texture; made on first draw.
+    pub thumb_tex: Option<egui::TextureHandle>,
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -50,6 +54,11 @@ impl Job {
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "output".into());
         let info = media::probe(&input);
+        let thumb = info
+            .as_ref()
+            .ok()
+            .and_then(|i| media::thumbnail(&input, i.duration))
+            .map(Arc::new);
         let (info, probe_error) = match info {
             Ok(i) => (Some(i), None),
             Err(e) => (None, Some(e)),
@@ -67,6 +76,8 @@ impl Job {
             pid: None,
             cancel: false,
             output: None,
+            thumb,
+            thumb_tex: None,
         }
     }
 

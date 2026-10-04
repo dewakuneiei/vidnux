@@ -150,3 +150,34 @@ pub fn probe(path: &Path) -> Result<MediaInfo, String> {
     }
     Ok(info)
 }
+
+pub const THUMB_W: usize = 160;
+pub const THUMB_H: usize = 90;
+
+/// One frame from about a tenth into the clip, letterboxed to 160x90 RGBA.
+/// `None` when ffmpeg cannot produce it; the queue then just shows no picture.
+pub fn thumbnail(path: &Path, duration: f64) -> Option<Vec<u8>> {
+    frame(path, Some(duration * 0.1), THUMB_W, THUMB_H)
+}
+
+/// A single frame of a video, or an image file as it is (`seek` = `None`),
+/// fitted into `w`x`h` with black bars and returned as raw RGBA.
+pub fn frame(path: &Path, seek: Option<f64>, w: usize, h: usize) -> Option<Vec<u8>> {
+    let filter = format!(
+        "scale={w}:{h}:force_original_aspect_ratio=decrease,\
+         pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black"
+    );
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(["-v", "error"]);
+    if let Some(at) = seek {
+        cmd.args(["-ss", &format!("{at:.2}")]);
+    }
+    let out = cmd
+        .arg("-i")
+        .arg(path)
+        .args(["-frames:v", "1", "-an", "-sn", "-vf", &filter])
+        .args(["-f", "rawvideo", "-pix_fmt", "rgba", "-"])
+        .output()
+        .ok()?;
+    (out.status.success() && out.stdout.len() == w * h * 4).then_some(out.stdout)
+}

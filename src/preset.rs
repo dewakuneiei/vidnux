@@ -401,8 +401,22 @@ fn audio_args(s: &Settings, info: &MediaInfo) -> Vec<String> {
     if info.audio_codec.is_none() {
         return vec!["-an".into()];
     }
+    let mode = audio_mode(s, info);
+    let a = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    match mode {
+        Audio::Copy | Audio::Auto => a(&["-c:a", "copy"]),
+        Audio::Pcm16 => a(&["-c:a", "pcm_s16le"]),
+        Audio::Pcm24 => a(&["-c:a", "pcm_s24le"]),
+        Audio::Flac => a(&["-c:a", "flac"]),
+        Audio::Aac320 => a(&["-c:a", "aac", "-b:a", "320k"]),
+        Audio::Opus192 => a(&["-c:a", "libopus", "-b:a", "192k"]),
+    }
+}
+
+/// What `Audio::Auto` resolves to for this source and target.
+fn audio_mode(s: &Settings, info: &MediaInfo) -> Audio {
     let src = info.audio_codec.clone().unwrap_or_default();
-    let mode = match s.audio {
+    match s.audio {
         Audio::Auto => match s.target {
             // Resolve on Linux will not open AAC; uncompressed always works.
             Target::DnxhrMov | Target::ProresMov | Target::UtvideoAvi => {
@@ -429,16 +443,72 @@ fn audio_args(s: &Settings, info: &MediaInfo) -> Vec<String> {
             }
         },
         other => other,
-    };
-    let a = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-    match mode {
-        Audio::Copy | Audio::Auto => a(&["-c:a", "copy"]),
-        Audio::Pcm16 => a(&["-c:a", "pcm_s16le"]),
-        Audio::Pcm24 => a(&["-c:a", "pcm_s24le"]),
-        Audio::Flac => a(&["-c:a", "flac"]),
-        Audio::Aac320 => a(&["-c:a", "aac", "-b:a", "320k"]),
-        Audio::Opus192 => a(&["-c:a", "libopus", "-b:a", "192k"]),
     }
+}
+
+/// Rough size of the converted file, in bytes. Intra-frame formats (DNxHR,
+/// ProRes) have a fixed bitrate per profile, so those are close; the CRF
+/// codecs and the lossless ones depend on the picture, so treat them as a
+/// planning figure for disk space, not a promise.
+pub fn estimate_bytes(info: &MediaInfo, s: &Settings) -> u64 {
+    // 1080p30 is the reference every table below is written for.
+    const REF_PIXELS_PER_SEC: f64 = 1920.0 * 1080.0 * 30.0;
+    let pps = info.width as f64 * info.height as f64 * info.fps.max(1.0);
+    let scale = pps / REF_PIXELS_PER_SEC;
+    let deep = if info.is_10bit() { 1.25 } else { 1.0 };
+
+    let video_mbps = match s.target {
+        Target::DnxhrMov => {
+            scale
+                * match s.profile {
+                    Profile::Sq => 145.0,
+                    Profile::Hq => 220.0,
+                    Profile::Hqx => 220.0,
+                    Profile::Fourfourfour => 440.0,
+                }
+        }
+        Target::ProresMov => {
+            scale
+                * match s.profile {
+                    Profile::Sq => 147.0,
+                    Profile::Hq => 220.0,
+                    Profile::Hqx => 330.0,
+                    Profile::Fourfourfour => 500.0,
+                }
+        }
+        Target::UtvideoAvi => scale * 150.0 * deep,
+        Target::Ffv1Mkv => scale * 110.0 * deep,
+        Target::H264Mp4 | Target::H265Mp4 | Target::Av1Mp4 | Target::Av1Mkv => {
+            let (lossless, vl, high, balanced) = match s.target {
+                Target::H264Mp4 => (130.0, 18.0, 12.0, 7.0),
+                Target::H265Mp4 => (110.0, 10.0, 7.5, 4.5),
+                _ => (110.0, 9.0, 4.5, 2.5),
+            };
+            scale
+                * match s.quality {
+                    Quality::Lossless => lossless,
+                    Quality::VisuallyLossless => vl,
+                    Quality::High => high,
+                    Quality::Balanced => balanced,
+                }
+        }
+    };
+
+    // Audio is assumed to be 48 kHz stereo.
+    let audio_kbps = if info.audio_codec.is_none() {
+        0.0
+    } else {
+        match audio_mode(s, info) {
+            Audio::Pcm16 => 1536.0,
+            Audio::Pcm24 => 2304.0,
+            Audio::Flac => 900.0,
+            Audio::Aac320 => 320.0,
+            Audio::Opus192 => 192.0,
+            Audio::Copy | Audio::Auto => 256.0,
+        }
+    };
+
+    ((video_mbps * 1000.0 + audio_kbps) * 1000.0 / 8.0 * info.duration) as u64
 }
 
 /// The full ffmpeg invocation for one job.
